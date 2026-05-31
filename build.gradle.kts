@@ -2,6 +2,7 @@ import com.android.build.gradle.BaseExtension
 import com.lagradost.cloudstream3.gradle.CloudstreamExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 buildscript {
     repositories {
@@ -61,10 +62,9 @@ subprojects {
             targetCompatibility = JavaVersion.VERSION_1_8
         }
 
-        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-            kotlinOptions {
-                jvmTarget = "1.8"
-                // This prevents warnings from becoming errors
+        tasks.withType<KotlinCompile> {
+            compilerOptions {
+                jvmTarget = JvmTarget.JVM_1_8
                 allWarningsAsErrors = false
             }
         }
