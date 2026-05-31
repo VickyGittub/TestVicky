@@ -10,30 +10,7 @@ import com.fasterxml.jackson.module.kotlin.readValue
 
 private val mapper = jacksonObjectMapper()
 
-// Helper function to parse JSON string to Map
 inline fun <reified T> String.parseJson(): T = mapper.readValue(this)
-
-// Type aliases for JSON handling
-typealias JsonObject = Map<String, Any?>
-typealias JsonArray = List<JsonObject>
-
-// Extension function for JSON parsing
-fun String.parseJsonObject(): JsonObject {
-    @Suppress("UNCHECKED_CAST")
-    return this.parseJson<Map<String, Any?>>() as JsonObject
-}
-
-// Helper extension functions
-fun JsonObject.getArray(key: String): JsonArray? {
-    return this[key] as? JsonArray
-}
-
-fun JsonObject.obj(key: String): JsonObject? {
-    return this[key] as? JsonObject
-}
-
-val JsonObject.string: String?
-    get() = this as? String
 
 class AnimeTokiProvider : MainAPI() {
     override var mainUrl = "https://animetoki.com"
@@ -62,10 +39,10 @@ class AnimeTokiProvider : MainAPI() {
                 !title.contains("Server renewal", ignoreCase = true) &&
                 !title.contains("Review of", ignoreCase = true)) {
                 
-                // FIXED: Use newAnimeSearchResponse (non-deprecated)
-                newAnimeSearchResponse(
+                AnimeSearchResponse(
                     name = title,
                     url = link,
+                    apiName = this.name,
                     posterUrl = image
                 )
             } else null
@@ -76,65 +53,33 @@ class AnimeTokiProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
         
-        // Extract title and poster
         val title = document.select("h1, .entry-title").first()?.text()?.trim() ?: "Unknown"
-        val poster = document.select("img.attachment-post-thumbnail, .featured-image img, .post-thumbnail img")
-            .first()?.attr("src")?.takeIf { it.startsWith("http") }
+        val poster = document.select("img").first()?.attr("src")?.takeIf { it.startsWith("http") }
         
-        // Find the cloud button link
-        val cloudButton = document.select("a[href*='cloud.animetoki.com'], .download-now a, a:contains(Download Now)")
-            .firstOrNull()?.attr("href") ?: findCloudLinkFromScript(document)
+        val cloudButton = document.select("a[href*='cloud.animetoki.com']").firstOrNull()?.attr("href")
+            ?: throw Exception("Cloud link not found")
         
-        if (cloudButton.isNullOrBlank()) {
-            throw Exception("Could not find cloud download link on page")
-        }
-
-        // Follow redirect to get the actual cloud page with token
         val cloudResponse = app.get(cloudButton, allowRedirects = true)
-        val finalCloudUrl = cloudResponse.url
+        val finalUrl = cloudResponse.url
         
-        // Extract the base path and token from the cloud URL
-        val (basePath, token) = extractCloudPathAndToken(finalCloudUrl)
+        val path = java.net.URI.create(finalUrl).path
+        val token = finalUrl.substringAfter("t=")
         
-        // Fetch seasons from API
-        val seasons = fetchSeasons(basePath, token)
+        val seasons = fetchSeasons(path, token)
         
-        // Create episodes from seasons
-        val episodes = mutableMapOf<DubStatus, List<Episode>>()
-        val episodeList = mutableListOf<Episode>()
+        val episodes = mutableListOf<Episode>()
         for (season in seasons) {
-            val seasonEpisodes = fetchEpisodesForSeason(basePath, season.id, token, season.name)
-            episodeList.addAll(seasonEpisodes)
+            episodes.addAll(fetchEpisodesForSeason(path, season.id, token))
         }
-        episodes[DubStatus.Subbed] = episodeList.sortedBy { it.episode }
 
-        // FIXED: Use newAnimeLoadResponse (non-deprecated)
-        return newAnimeLoadResponse(
+        return AnimeLoadResponse(
             name = title,
             url = url,
+            apiName = this.name,
+            type = TvType.Anime,
             posterUrl = poster,
-            episodes = episodes
+            episodes = mutableMapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })
         )
-    }
-
-    private suspend fun findCloudLinkFromScript(document: Document): String? {
-        val scripts = document.select("script")
-        for (script in scripts) {
-            val html = script.html()
-            val pattern = Regex("""https://cloud\.animetoki\.com/[^\s"'<>]+""")
-            val match = pattern.find(html)
-            if (match != null) {
-                return match.value
-            }
-        }
-        return null
-    }
-
-    private fun extractCloudPathAndToken(url: String): Pair<String, String> {
-        val uri = java.net.URI.create(url)
-        val path = uri.path
-        val token = uri.query?.substringAfter("t=") ?: ""
-        return Pair(path, token)
     }
 
     // =============================== FETCH SEASONS ===============================
@@ -144,124 +89,80 @@ class AnimeTokiProvider : MainAPI() {
         val response = safeApiCall {
             app.post(
                 url = apiUrl,
-                headers = mapOf(
-                    "Referer" to mainUrl,
-                    "X-Requested-With" to "XMLHttpRequest"
-                )
+                headers = mapOf("Referer" to mainUrl, "X-Requested-With" to "XMLHttpRequest")
             )
-        } ?: throw Exception("Failed to fetch seasons from API")
+        } ?: return emptyList()
         
-        // FIXED: Get text from response safely
-        val responseText = response.document?.text() ?: response.text().toString()
-        val json = responseText.parseJsonObject()
-        val filesArray = json.getArray("files") ?: return emptyList()
+        val jsonString = response.text()
+        val json = jsonString.parseJson<Map<String, Any>>()
+        val files = json["files"] as? List<Map<String, Any>> ?: return emptyList()
         
-        return filesArray.mapNotNull { item ->
-            val mimeType = item.obj("mimeType")?.string ?: return@mapNotNull null
-            if (mimeType == "application/vnd.google-apps.folder") {
-                val id = item.obj("id")?.string ?: return@mapNotNull null
-                val name = item.obj("name")?.string ?: return@mapNotNull null
+        return files.mapNotNull { file ->
+            val mime = file["mimeType"] as? String
+            if (mime == "application/vnd.google-apps.folder") {
+                val id = file["id"] as? String ?: return@mapNotNull null
+                val name = file["name"] as? String ?: return@mapNotNull null
                 SeasonData(id, name)
             } else null
         }
     }
 
-    // =============================== FETCH EPISODES FOR SEASON ===============================
-    private suspend fun fetchEpisodesForSeason(basePath: String, folderId: String, token: String, seasonName: String): List<Episode> {
-        val folderApiUrl = "$CLOUD_BASE$basePath/$folderId?t=$token"
+    // =============================== FETCH EPISODES ===============================
+    private suspend fun fetchEpisodesForSeason(basePath: String, folderId: String, token: String): List<Episode> {
+        val apiUrl = "$CLOUD_BASE$basePath/$folderId?t=$token"
         
         val response = safeApiCall {
             app.post(
-                url = folderApiUrl,
-                headers = mapOf(
-                    "Referer" to mainUrl,
-                    "X-Requested-With" to "XMLHttpRequest"
-                )
+                url = apiUrl,
+                headers = mapOf("Referer" to mainUrl, "X-Requested-With" to "XMLHttpRequest")
             )
         } ?: return emptyList()
         
-        // FIXED: Get text from response safely
-        val responseText = response.document?.text() ?: response.text().toString()
-        val json = responseText.parseJsonObject()
-        val filesArray = json.getArray("files") ?: return emptyList()
+        val jsonString = response.text()
+        val json = jsonString.parseJson<Map<String, Any>>()
+        val files = json["files"] as? List<Map<String, Any>> ?: return emptyList()
         
-        return filesArray.mapNotNull { item ->
-            val mimeType = item.obj("mimeType")?.string ?: return@mapNotNull null
-            if (mimeType.startsWith("video/")) {
-                val fileId = item.obj("id")?.string ?: return@mapNotNull null
-                val fileName = item.obj("name")?.string ?: return@mapNotNull null
-                val fileSize = item.obj("size")?.string?.toLongOrNull() ?: 0L
+        return files.mapNotNull { file ->
+            val mime = file["mimeType"] as? String
+            if (mime?.startsWith("video/") == true) {
+                val id = file["id"] as? String ?: return@mapNotNull null
+                val name = file["name"] as? String ?: return@mapNotNull null
                 
-                // Extract episode number from filename
-                val episodeNum = extractEpisodeNumber(fileName)
+                val episodeNum = Regex("""(?:Episode|EP|E)\s*(\d+)""", RegexOption.IGNORE_CASE)
+                    .find(name)?.groupValues?.get(1)?.toIntOrNull()
                 
-                // Encode filename for URL
-                val encodedName = Base64.encodeToString(fileName.toByteArray(), Base64.NO_WRAP)
-                val videoUrl = "$CLOUD_BASE/?a=download&id=$fileId&name=$encodedName&n=2"
+                val encodedName = Base64.encodeToString(name.toByteArray(), Base64.NO_WRAP)
+                val videoUrl = "$CLOUD_BASE/?a=download&id=$id&name=$encodedName&n=2"
                 
-                // FIXED: Use newEpisode (non-deprecated)
-                newEpisode(
-                    link = videoUrl,
-                    name = fileName,
+                Episode(
+                    data = videoUrl,
+                    name = name,
                     episode = episodeNum
                 )
             } else null
         }.sortedBy { it.episode }
     }
 
-    private fun extractEpisodeNumber(fileName: String): Int? {
-        val patterns = listOf(
-            Regex("""Episode\s*(\d+)""", RegexOption.IGNORE_CASE),
-            Regex("""EP\s*(\d+)""", RegexOption.IGNORE_CASE),
-            Regex("""E(\d+)""", RegexOption.IGNORE_CASE),
-            Regex("""- (\d+) -"""),
-            Regex("""\[(\d+)\]""")
-        )
-        
-        for (pattern in patterns) {
-            val match = pattern.find(fileName)
-            match?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
-        }
-        
-        val numberMatch = Regex("""(\d+)""").find(fileName)
-        return numberMatch?.groupValues?.get(1)?.toIntOrNull()
-    }
-
-    // =============================== LOAD VIDEO LINKS ===============================
+    // =============================== LOAD LINKS ===============================
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val quality = when {
-            data.contains("1080p", ignoreCase = true) -> Qualities.P1080.value
-            data.contains("720p", ignoreCase = true) -> Qualities.P720.value
-            data.contains("480p", ignoreCase = true) -> Qualities.P480.value
-            else -> Qualities.Unknown.value
-        }
-        
         callback.invoke(
             ExtractorLink(
                 source = name,
-                name = "AnimeToki Cloud",
+                name = "AnimeToki",
                 url = data,
                 referer = mainUrl,
-                quality = quality,
+                quality = Qualities.Unknown.value,
                 type = ExtractorLinkType.M3U8,
-                headers = mapOf(
-                    "Referer" to mainUrl,
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                )
+                headers = mapOf("Referer" to mainUrl)
             )
         )
-        
         return true
     }
 
-    // =============================== DATA CLASS ===============================
-    data class SeasonData(
-        val id: String,
-        val name: String
-    )
+    data class SeasonData(val id: String, val name: String)
 }
