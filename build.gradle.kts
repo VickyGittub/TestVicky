@@ -39,6 +39,11 @@ fun Project.android(configuration: BaseExtension.() -> Unit) =
     extensions.getByName<BaseExtension>("android").configuration()
 
 subprojects {
+    tasks.withType<KotlinCompile> {
+    kotlinOptions {
+        allWarningsAsErrors = false
+    }
+}
     apply(plugin = "com.android.library")
     apply(plugin = "kotlin-android")
     apply(plugin = "com.lagradost.cloudstream3.gradle")
