@@ -34,9 +34,10 @@ class AnimeTokiProvider : MainAPI() {
                 !title.contains("Server renewal", ignoreCase = true) &&
                 !title.contains("Review of", ignoreCase = true)) {
                 
-                newAnimeSearchResponse(
+                AnimeSearchResponse(
                     name = title,
                     url = link,
+                    apiName = this.name,
                     posterUrl = image
                 )
             } else null
@@ -66,9 +67,11 @@ class AnimeTokiProvider : MainAPI() {
             episodes.addAll(fetchEpisodesForSeason(path, season.id, token))
         }
 
-        return newAnimeLoadResponse(
+        return AnimeLoadResponse(
             name = title,
             url = url,
+            apiName = this.name,
+            type = TvType.Anime,
             posterUrl = poster,
             episodes = mutableMapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })
         )
@@ -135,10 +138,12 @@ class AnimeTokiProvider : MainAPI() {
                 val encodedName = Base64.encodeToString(name.toByteArray(), Base64.NO_WRAP)
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$id&name=$encodedName&n=2"
                 
-                newEpisode(
-                    url = videoUrl,
-                    name = name,
-                    episode = episodeNum
+                episodes.add(
+                    Episode(
+                        data = videoUrl,
+                        name = name,
+                        episode = episodeNum
+                    )
                 )
             }
         }
