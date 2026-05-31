@@ -1,12 +1,11 @@
 package com.animetoki
 
 import android.content.Context
-import androidx.appcompat.app.AppCompatActivity
-import com.lagradost.cloudstream3.plugin.Plugin
-import com.lagradost.cloudstream3.plugin.CloudstreamPlugin
+import com.lagradost.cloudstream3.plugins.Plugin
+import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 
 @CloudstreamPlugin
-class AnimeTokiPlugin : Plugin() {
+class AnimeTokiPlugin : Plugin {
     override fun load(context: Context) {
         registerMainAPI(AnimeTokiProvider())
     }
