@@ -5,12 +5,9 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.mvvm.safeApiCall
 import org.jsoup.nodes.Document
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
+import com.fasterxml.jackson.databind.ObjectMapper
 
-private val mapper = jacksonObjectMapper()
-
-inline fun <reified T> String.parseJson(): T = mapper.readValue(this)
+private val mapper = ObjectMapper()
 
 class AnimeTokiProvider : MainAPI() {
     override var mainUrl = "https://animetoki.com"
@@ -39,10 +36,10 @@ class AnimeTokiProvider : MainAPI() {
                 !title.contains("Server renewal", ignoreCase = true) &&
                 !title.contains("Review of", ignoreCase = true)) {
                 
-                AnimeSearchResponse(
-                    name = title,
+                // Using non-deprecated method
+                newAnimeSearchResponse(
+                    title = title,
                     url = link,
-                    apiName = this.name,
                     posterUrl = image
                 )
             } else null
@@ -72,14 +69,20 @@ class AnimeTokiProvider : MainAPI() {
             episodes.addAll(fetchEpisodesForSeason(path, season.id, token))
         }
 
-        return AnimeLoadResponse(
-            name = title,
+        // Using non-deprecated method
+        return newAnimeLoadResponse(
+            title = title,
             url = url,
-            apiName = this.name,
-            type = TvType.Anime,
             posterUrl = poster,
-            episodes = mutableMapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })
+            episodes = mapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })
         )
+    }
+
+    private fun extractCloudPathAndToken(url: String): Pair<String, String> {
+        val uri = java.net.URI.create(url)
+        val path = uri.path
+        val token = uri.query?.substringAfter("t=") ?: ""
+        return Pair(path, token)
     }
 
     // =============================== FETCH SEASONS ===============================
@@ -89,17 +92,26 @@ class AnimeTokiProvider : MainAPI() {
         val response = safeApiCall {
             app.post(
                 url = apiUrl,
-                headers = mapOf("Referer" to mainUrl, "X-Requested-With" to "XMLHttpRequest")
+                headers = mapOf(
+                    "Referer" to mainUrl,
+                    "X-Requested-With" to "XMLHttpRequest"
+                )
             )
         } ?: return emptyList()
         
-        val jsonString = response.text()
-        val json = jsonString.parseJson<Map<String, Any>>()
+        // Fix: Get response body correctly
+        val jsonString = try {
+            (response as? com.lagradost.nicehttp.Response)?.text ?: return emptyList()
+        } catch (e: Exception) {
+            return emptyList()
+        }
+        
+        val json = mapper.readValue(jsonString, Map::class.java) as Map<String, Any>
         val files = json["files"] as? List<Map<String, Any>> ?: return emptyList()
         
         return files.mapNotNull { file ->
-            val mime = file["mimeType"] as? String
-            if (mime == "application/vnd.google-apps.folder") {
+            val mimeType = file["mimeType"] as? String
+            if (mimeType == "application/vnd.google-apps.folder") {
                 val id = file["id"] as? String ?: return@mapNotNull null
                 val name = file["name"] as? String ?: return@mapNotNull null
                 SeasonData(id, name)
@@ -107,35 +119,43 @@ class AnimeTokiProvider : MainAPI() {
         }
     }
 
-    // =============================== FETCH EPISODES ===============================
+    // =============================== FETCH EPISODES FOR SEASON ===============================
     private suspend fun fetchEpisodesForSeason(basePath: String, folderId: String, token: String): List<Episode> {
-        val apiUrl = "$CLOUD_BASE$basePath/$folderId?t=$token"
+        val folderApiUrl = "$CLOUD_BASE$basePath/$folderId?t=$token"
         
         val response = safeApiCall {
             app.post(
-                url = apiUrl,
-                headers = mapOf("Referer" to mainUrl, "X-Requested-With" to "XMLHttpRequest")
+                url = folderApiUrl,
+                headers = mapOf(
+                    "Referer" to mainUrl,
+                    "X-Requested-With" to "XMLHttpRequest"
+                )
             )
         } ?: return emptyList()
         
-        val jsonString = response.text()
-        val json = jsonString.parseJson<Map<String, Any>>()
+        // Fix: Get response body correctly
+        val jsonString = try {
+            (response as? com.lagradost.nicehttp.Response)?.text ?: return emptyList()
+        } catch (e: Exception) {
+            return emptyList()
+        }
+        
+        val json = mapper.readValue(jsonString, Map::class.java) as Map<String, Any>
         val files = json["files"] as? List<Map<String, Any>> ?: return emptyList()
         
         return files.mapNotNull { file ->
-            val mime = file["mimeType"] as? String
-            if (mime?.startsWith("video/") == true) {
+            val mimeType = file["mimeType"] as? String
+            if (mimeType?.startsWith("video/") == true) {
                 val id = file["id"] as? String ?: return@mapNotNull null
                 val name = file["name"] as? String ?: return@mapNotNull null
                 
-                val episodeNum = Regex("""(?:Episode|EP|E)\s*(\d+)""", RegexOption.IGNORE_CASE)
-                    .find(name)?.groupValues?.get(1)?.toIntOrNull()
-                
+                val episodeNum = extractEpisodeNumber(name)
                 val encodedName = Base64.encodeToString(name.toByteArray(), Base64.NO_WRAP)
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$id&name=$encodedName&n=2"
                 
-                Episode(
-                    data = videoUrl,
+                // Using non-deprecated method
+                newEpisode(
+                    link = videoUrl,
                     name = name,
                     episode = episodeNum
                 )
@@ -143,7 +163,24 @@ class AnimeTokiProvider : MainAPI() {
         }.sortedBy { it.episode }
     }
 
-    // =============================== LOAD LINKS ===============================
+    private fun extractEpisodeNumber(fileName: String): Int? {
+        val patterns = listOf(
+            Regex("""Episode\s*(\d+)""", RegexOption.IGNORE_CASE),
+            Regex("""EP\s*(\d+)""", RegexOption.IGNORE_CASE),
+            Regex("""E(\d+)""", RegexOption.IGNORE_CASE),
+            Regex("""- (\d+) -"""),
+            Regex("""\[(\d+)\]""")
+        )
+        
+        for (pattern in patterns) {
+            val match = pattern.find(fileName)
+            match?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+        }
+        
+        return null
+    }
+
+    // =============================== LOAD VIDEO LINKS ===============================
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -153,16 +190,23 @@ class AnimeTokiProvider : MainAPI() {
         callback.invoke(
             ExtractorLink(
                 source = name,
-                name = "AnimeToki",
+                name = "AnimeToki Cloud",
                 url = data,
                 referer = mainUrl,
                 quality = Qualities.Unknown.value,
                 type = ExtractorLinkType.M3U8,
-                headers = mapOf("Referer" to mainUrl)
+                headers = mapOf(
+                    "Referer" to mainUrl,
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                )
             )
         )
         return true
     }
 
-    data class SeasonData(val id: String, val name: String)
+    // =============================== DATA CLASS ===============================
+    data class SeasonData(
+        val id: String,
+        val name: String
+    )
 }
