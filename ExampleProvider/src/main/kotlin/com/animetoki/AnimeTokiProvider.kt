@@ -5,9 +5,8 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.mvvm.safeApiCall
 import org.jsoup.nodes.Document
-import com.fasterxml.jackson.databind.ObjectMapper
-
-private val mapper = ObjectMapper()
+import org.json.JSONObject
+import org.json.JSONArray
 
 class AnimeTokiProvider : MainAPI() {
     override var mainUrl = "https://animetoki.com"
@@ -69,7 +68,7 @@ class AnimeTokiProvider : MainAPI() {
             episodes.addAll(fetchEpisodesForSeason(path, season.id, token))
         }
 
-        AnimeLoadResponse(
+        return AnimeLoadResponse(
             name = title,
             url = url,
             apiName = this.name,
@@ -93,18 +92,22 @@ class AnimeTokiProvider : MainAPI() {
             )
         } ?: return emptyList()
         
+        // Get the response body text correctly
         val jsonString = response.toString()
-        val json = mapper.readValue<Map<String, Any>>(jsonString)
-        val files = json["files"] as? List<Map<String, Any>> ?: return emptyList()
+        val jsonObject = JSONObject(jsonString)
+        val filesArray = jsonObject.getJSONArray("files")
         
-        return files.mapNotNull { file ->
-            val mimeType = file["mimeType"] as? String
+        val seasons = mutableListOf<SeasonData>()
+        for (i in 0 until filesArray.length()) {
+            val file = filesArray.getJSONObject(i)
+            val mimeType = file.getString("mimeType")
             if (mimeType == "application/vnd.google-apps.folder") {
-                val id = file["id"] as? String ?: return@mapNotNull null
-                val name = file["name"] as? String ?: return@mapNotNull null
-                SeasonData(id, name)
-            } else null
+                val id = file.getString("id")
+                val name = file.getString("name")
+                seasons.add(SeasonData(id, name))
+            }
         }
+        return seasons
     }
 
     // =============================== FETCH EPISODES FOR SEASON ===============================
@@ -122,26 +125,31 @@ class AnimeTokiProvider : MainAPI() {
         } ?: return emptyList()
         
         val jsonString = response.toString()
-        val json = mapper.readValue<Map<String, Any>>(jsonString)
-        val files = json["files"] as? List<Map<String, Any>> ?: return emptyList()
+        val jsonObject = JSONObject(jsonString)
+        val filesArray = jsonObject.getJSONArray("files")
         
-        return files.mapNotNull { file ->
-            val mimeType = file["mimeType"] as? String
-            if (mimeType?.startsWith("video/") == true) {
-                val id = file["id"] as? String ?: return@mapNotNull null
-                val name = file["name"] as? String ?: return@mapNotNull null
+        val episodes = mutableListOf<Episode>()
+        for (i in 0 until filesArray.length()) {
+            val file = filesArray.getJSONObject(i)
+            val mimeType = file.getString("mimeType")
+            if (mimeType.startsWith("video/")) {
+                val id = file.getString("id")
+                val name = file.getString("name")
                 
                 val episodeNum = extractEpisodeNumber(name)
                 val encodedName = Base64.encodeToString(name.toByteArray(), Base64.NO_WRAP)
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$id&name=$encodedName&n=2"
                 
-                Episode(
-                    data = videoUrl,
-                    name = name,
-                    episode = episodeNum
+                episodes.add(
+                    Episode(
+                        data = videoUrl,
+                        name = name,
+                        episode = episodeNum
+                    )
                 )
-            } else null
-        }.sortedBy { it.episode }
+            }
+        }
+        return episodes.sortedBy { it.episode }
     }
 
     private fun extractEpisodeNumber(fileName: String): Int? {
