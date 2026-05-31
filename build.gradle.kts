@@ -48,30 +48,31 @@ subprojects {
     }
 
     android {
-        namespace = "com.animetoki"
+android {
+    namespace = "com.animetoki"
 
-        defaultConfig {
-            minSdk = 21
-            compileSdk = 35
-            targetSdk = 35
-        }
+    defaultConfig {
+        minSdk = 21
+        compileSdkVersion(35)  // FIXED: Changed from compileSdk = 35
+        targetSdk = 35
+    }
 
-        compileOptions {
-            sourceCompatibility = JavaVersion.VERSION_1_8
-            targetCompatibility = JavaVersion.VERSION_1_8
-        }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
 
-        tasks.withType<KotlinJvmCompile> {
-            compilerOptions {
-                jvmTarget.set(JvmTarget.JVM_1_8)
-                freeCompilerArgs.addAll(
-                    "-Xno-call-assertions",
-                    "-Xno-param-assertions",
-                    "-Xno-receiver-assertions"
-                )
-            }
+    tasks.withType<KotlinJvmCompile> {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_1_8)
+            freeCompilerArgs.addAll(
+                "-Xno-call-assertions",
+                "-Xno-param-assertions",
+                "-Xno-receiver-assertions"
+            )
         }
     }
+}
 
     dependencies {
         val cloudstream by configurations
