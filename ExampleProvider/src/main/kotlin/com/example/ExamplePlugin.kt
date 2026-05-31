@@ -1,6 +1,9 @@
 package com.example
 
 import android.content.Context
+import android.app.Dialog
+import android.os.Bundle
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
@@ -11,7 +14,7 @@ class BlankFragment(val plugin: Plugin) : DialogFragment() {
         return AlertDialog.Builder(requireContext())
             .setTitle("Settings")
             .setMessage("No settings available")
-            .setPositiveButton("OK") { _, _ -> }
+            .setPositiveButton("OK") { _: android.content.DialogInterface, _: Int -> }
             .create()
     }
 }
