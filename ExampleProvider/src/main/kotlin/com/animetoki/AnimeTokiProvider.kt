@@ -5,7 +5,6 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.mvvm.safeApiCall
 import org.jsoup.nodes.Document
-import kotlinx.serialization.json.*
 
 // Type aliases for JSON handling
 typealias JsonObject = Map<String, Any?>
@@ -13,12 +12,8 @@ typealias JsonArray = List<JsonObject>
 
 // Extension function for JSON parsing
 fun String.parseJsonObject(): JsonObject {
-    return try {
-        val jsonElement = Json.parseToJsonElement(this)
-        jsonElement.jsonObject.toMap().mapValues { (_, v) -> v.jsonPrimitive.contentOrNull }
-    } catch (e: Exception) {
-        emptyMap()
-    }
+    @Suppress("UNCHECKED_CAST")
+    return parseJson<Map<String, Any?>>(this) as JsonObject
 }
 
 // Helper extension functions
@@ -60,11 +55,11 @@ class AnimeTokiProvider : MainAPI() {
                 !title.contains("Server renewal", ignoreCase = true) &&
                 !title.contains("Review of", ignoreCase = true)) {
                 
-                AnimeSearchResponse(
-                name = title,  // Changed from 'title' to 'name'
-                url = link,
-                posterUrl = image,
-                apiName = name
+                // FIXED: Use newAnimeSearchResponse instead of constructor
+                newAnimeSearchResponse(
+                    name = title,
+                    url = link,
+                    posterUrl = image
                 )
             } else null
         }
@@ -98,18 +93,20 @@ class AnimeTokiProvider : MainAPI() {
         val seasons = fetchSeasons(basePath, token)
         
         // Create episodes from seasons
-        val episodes = mutableListOf<Episode>()
+        val episodes = mutableMapOf<DubStatus, List<Episode>>()
+        val episodeList = mutableListOf<Episode>()
         for (season in seasons) {
             val seasonEpisodes = fetchEpisodesForSeason(basePath, season.id, token, season.name)
-            episodes.addAll(seasonEpisodes)
+            episodeList.addAll(seasonEpisodes)
         }
+        episodes[DubStatus.Subbed] = episodeList.sortedBy { it.episode }
 
-        return AnimeLoadResponse(
+        // FIXED: Use newAnimeLoadResponse instead of constructor
+        return newAnimeLoadResponse(
             name = title,
             url = url,
             posterUrl = poster,
-            episodes = mutableMapOf(DubStatus.Subbed to episodes.sortedBy { it.episode }),
-            apiName = name
+            episodes = episodes
         )
     }
 
@@ -147,7 +144,9 @@ class AnimeTokiProvider : MainAPI() {
             )
         } ?: throw Exception("Failed to fetch seasons from API")
         
-        val json = response.text.parseJsonObject()
+        // FIXED: response.text -> response.body
+        val body = response.body ?: return emptyList()
+        val json = body.parseJsonObject()
         val filesArray = json.getArray("files") ?: return emptyList()
         
         return filesArray.mapNotNull { item ->
@@ -174,7 +173,9 @@ class AnimeTokiProvider : MainAPI() {
             )
         } ?: return emptyList()
         
-        val json = response.text.parseJsonObject()
+        // FIXED: response.text -> response.body
+        val body = response.body ?: return emptyList()
+        val json = body.parseJsonObject()
         val filesArray = json.getArray("files") ?: return emptyList()
         
         return filesArray.mapNotNull { item ->
@@ -191,12 +192,12 @@ class AnimeTokiProvider : MainAPI() {
                 val encodedName = Base64.encodeToString(fileName.toByteArray(), Base64.NO_WRAP)
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$fileId&name=$encodedName&n=2"
                 
-Episode(
-    data = videoUrl,  // This is the required first parameter
-    name = fileName,
-    episode = episodeNum,
-    posterUrl = null
-)
+                // FIXED: Use newEpisode instead of constructor
+                newEpisode(
+                    link = videoUrl,
+                    name = fileName,
+                    episode = episodeNum
+                )
             } else null
         }.sortedBy { it.episode }
     }
@@ -220,36 +221,36 @@ Episode(
     }
 
     // =============================== LOAD VIDEO LINKS ===============================
-override suspend fun loadLinks(
-    data: String,
-    isCasting: Boolean,
-    subtitleCallback: (SubtitleFile) -> Unit,
-    callback: (ExtractorLink) -> Unit
-): Boolean {
-    val quality = when {
-        data.contains("1080p", ignoreCase = true) -> Qualities.P1080.value
-        data.contains("720p", ignoreCase = true) -> Qualities.P720.value
-        data.contains("480p", ignoreCase = true) -> Qualities.P480.value
-        else -> Qualities.Unknown.value
-    }
-    
-    callback.invoke(
-        ExtractorLink(
-            source = name,
-            name = "AnimeToki Cloud",
-            url = data,
-            referer = mainUrl,
-            quality = quality,
-            type = ExtractorLinkType.M3U8,
-            headers = mapOf(
-                "Referer" to mainUrl,
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val quality = when {
+            data.contains("1080p", ignoreCase = true) -> Qualities.P1080.value
+            data.contains("720p", ignoreCase = true) -> Qualities.P720.value
+            data.contains("480p", ignoreCase = true) -> Qualities.P480.value
+            else -> Qualities.Unknown.value
+        }
+        
+        callback.invoke(
+            ExtractorLink(
+                source = name,
+                name = "AnimeToki Cloud",
+                url = data,
+                referer = mainUrl,
+                quality = quality,
+                type = ExtractorLinkType.M3U8,
+                headers = mapOf(
+                    "Referer" to mainUrl,
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                )
             )
         )
-    )
-    
-    return true
-}
+        
+        return true
+    }
 
     // =============================== DATA CLASS ===============================
     data class SeasonData(
