@@ -53,6 +53,39 @@ class AnimeTokiProvider : MainAPI() {
             episodes = mutableMapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })  // Changed to mutableMapOf
         )
     }
+    
+    private fun findCloudLinkFromScript(document: Document): String? {
+    // Parse script tags to find cloud links
+    return document.select("script").mapNotNull { script ->
+        script.data().takeIf { it.contains("cloud.animetoki.com") }
+            ?.let { extractUrlFromScript(it) }
+    }.firstOrNull()
+    }
+
+    private fun extractUrlFromScript(scriptContent: String): String? {
+    val regex = """(https?://[^\s"'<>]+cloud\.animetoki\.com[^\s"'<>]*)""".toRegex()
+    return regex.find(scriptContent)?.value
+    }
+
+    private fun extractCloudPathAndToken(url: String): Pair<String, String> {
+    val uri = java.net.URI(url)
+    val params = uri.query.split("&").associate {
+        val (k, v) = it.split("=", limit = 2)
+        k to java.net.URLDecoder.decode(v, "UTF-8")
+    }
+    val basePath = params["p"] ?: ""
+    val token = params["t"] ?: ""
+    return basePath to token
+    }
+
+    private fun extractEpisodeNumber(fileName: String): Int? {
+    val regex = """ep(?:isode)?[\s._-]?(\d+)""".toRegex(RegexOption.IGNORE_CASE)
+    return regex.find(fileName)?.groupValues?.get(1)?.toIntOrNull()
+    }
+
+    private const val CLOUD_BASE = "https://cloud.animetoki.com"
+
+data class SeasonData(val id: String, val name: String)
 
     private suspend fun fetchSeasons(basePath: String, token: String): List<SeasonData> {
         val apiUrl = "$CLOUD_BASE$basePath?t=$token"
