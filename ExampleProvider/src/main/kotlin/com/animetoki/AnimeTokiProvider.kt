@@ -186,13 +186,13 @@ class AnimeTokiProvider : MainAPI() {
                 val encodedName = Base64.encodeToString(fileName.toByteArray(), Base64.NO_WRAP)
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$fileId&name=$encodedName&n=2"
                 
-                Episode(
-                    link = videoUrl,
-                    name = fileName,
-                    episode = episodeNum,
-                    posterUrl = null,
-                    size = fileSize
-                )
+Episode(
+    link = videoUrl,
+    name = fileName,
+    episode = episodeNum,
+    posterUrl = null,
+    data = videoUrl  // Add this required parameter
+)
             } else null
         }.sortedBy { it.episode }
     }
@@ -216,35 +216,36 @@ class AnimeTokiProvider : MainAPI() {
     }
 
     // =============================== LOAD VIDEO LINKS ===============================
-    override suspend fun loadLinks(
-        url: String,
-        callback: (ExtractorLink) -> Unit,
-        subtitleCallback: (SubtitleFile) -> Unit
-    ): Boolean {
-        val quality = when {
-            url.contains("1080p", ignoreCase = true) -> QUALITY_1080p
-            url.contains("720p", ignoreCase = true) -> QUALITY_720p
-            url.contains("480p", ignoreCase = true) -> QUALITY_480p
-            else -> QUALITY_UNKNOWN
-        }
-        
-        callback.invoke(
-            ExtractorLink(
-                source = name,
-                name = "AnimeToki Cloud",
-                url = url,
-                referer = mainUrl,
-                quality = quality,
-                type = if (url.contains(".mkv")) TvType.Episode else TvType.Episode,
-                headers = mapOf(
-                    "Referer" to mainUrl,
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                )
+override suspend fun loadLinks(
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    val quality = when {
+        data.contains("1080p", ignoreCase = true) -> Qualities.P1080.value
+        data.contains("720p", ignoreCase = true) -> Qualities.P720.value
+        data.contains("480p", ignoreCase = true) -> Qualities.P480.value
+        else -> Qualities.Unknown.value
+    }
+    
+    callback.invoke(
+        ExtractorLink(
+            source = name,
+            name = "AnimeToki Cloud",
+            url = data,
+            referer = mainUrl,
+            quality = quality,
+            type = ExtractorLinkType.M3U8,
+            headers = mapOf(
+                "Referer" to mainUrl,
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
         )
-        
-        return true
-    }
+    )
+    
+    return true
+}
 
     // =============================== DATA CLASS ===============================
     data class SeasonData(
