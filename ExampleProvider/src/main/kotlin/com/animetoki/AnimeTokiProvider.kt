@@ -19,6 +19,7 @@ class AnimeTokiProvider : MainAPI() {
         const val CLOUD_BASE = "https://cloud.animetoki.com"
     }
 
+    // =============================== SEARCH ===============================
     override suspend fun search(query: String): List<SearchResponse> {
         val searchUrl = "$mainUrl/?s=${query.replace(" ", "+")}"
         val document = app.get(searchUrl).document
@@ -33,16 +34,16 @@ class AnimeTokiProvider : MainAPI() {
                 !title.contains("Server renewal", ignoreCase = true) &&
                 !title.contains("Review of", ignoreCase = true)) {
                 
-                AnimeSearchResponse(
+                newAnimeSearchResponse(
                     name = title,
                     url = link,
-                    apiName = this.name,
                     posterUrl = image
                 )
             } else null
         }
     }
 
+    // =============================== LOAD SERIES ===============================
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
         
@@ -65,16 +66,15 @@ class AnimeTokiProvider : MainAPI() {
             episodes.addAll(fetchEpisodesForSeason(path, season.id, token))
         }
 
-        return AnimeLoadResponse(
+        return newAnimeLoadResponse(
             name = title,
             url = url,
-            apiName = this.name,
-            type = TvType.Anime,
             posterUrl = poster,
             episodes = mutableMapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })
         )
     }
 
+    // =============================== FETCH SEASONS ===============================
     private suspend fun fetchSeasons(basePath: String, token: String): List<SeasonData> {
         val apiUrl = "$CLOUD_BASE$basePath?t=$token"
         
@@ -105,6 +105,7 @@ class AnimeTokiProvider : MainAPI() {
         return seasons
     }
 
+    // =============================== FETCH EPISODES ===============================
     private suspend fun fetchEpisodesForSeason(basePath: String, folderId: String, token: String): List<Episode> {
         val folderApiUrl = "$CLOUD_BASE$basePath/$folderId?t=$token"
         
@@ -135,7 +136,7 @@ class AnimeTokiProvider : MainAPI() {
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$id&name=$encodedName&n=2"
                 
                 newEpisode(
-                    data = videoUrl,
+                    url = videoUrl,
                     name = name,
                     episode = episodeNum
                 )
@@ -149,6 +150,7 @@ class AnimeTokiProvider : MainAPI() {
         return pattern.find(fileName)?.groupValues?.get(1)?.toIntOrNull()
     }
 
+    // =============================== LOAD VIDEO LINKS ===============================
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -169,5 +171,6 @@ class AnimeTokiProvider : MainAPI() {
         return true
     }
 
+    // =============================== DATA CLASS ===============================
     data class SeasonData(val id: String, val name: String)
 }
