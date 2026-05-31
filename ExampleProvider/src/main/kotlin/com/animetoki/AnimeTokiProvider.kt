@@ -36,10 +36,10 @@ class AnimeTokiProvider : MainAPI() {
                 !title.contains("Server renewal", ignoreCase = true) &&
                 !title.contains("Review of", ignoreCase = true)) {
                 
-                // Using non-deprecated method
-                newAnimeSearchResponse(
-                    title = title,
+                AnimeSearchResponse(
+                    name = title,
                     url = link,
+                    apiName = this.name,
                     posterUrl = image
                 )
             } else null
@@ -69,20 +69,14 @@ class AnimeTokiProvider : MainAPI() {
             episodes.addAll(fetchEpisodesForSeason(path, season.id, token))
         }
 
-        // Using non-deprecated method
-        return newAnimeLoadResponse(
-            title = title,
+        AnimeLoadResponse(
+            name = title,
             url = url,
+            apiName = this.name,
+            type = TvType.Anime,
             posterUrl = poster,
-            episodes = mapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })
+            episodes = mutableMapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })
         )
-    }
-
-    private fun extractCloudPathAndToken(url: String): Pair<String, String> {
-        val uri = java.net.URI.create(url)
-        val path = uri.path
-        val token = uri.query?.substringAfter("t=") ?: ""
-        return Pair(path, token)
     }
 
     // =============================== FETCH SEASONS ===============================
@@ -99,14 +93,8 @@ class AnimeTokiProvider : MainAPI() {
             )
         } ?: return emptyList()
         
-        // Fix: Get response body correctly
-        val jsonString = try {
-            (response as? com.lagradost.nicehttp.Response)?.text ?: return emptyList()
-        } catch (e: Exception) {
-            return emptyList()
-        }
-        
-        val json = mapper.readValue(jsonString, Map::class.java) as Map<String, Any>
+        val jsonString = response.toString()
+        val json = mapper.readValue<Map<String, Any>>(jsonString)
         val files = json["files"] as? List<Map<String, Any>> ?: return emptyList()
         
         return files.mapNotNull { file ->
@@ -133,14 +121,8 @@ class AnimeTokiProvider : MainAPI() {
             )
         } ?: return emptyList()
         
-        // Fix: Get response body correctly
-        val jsonString = try {
-            (response as? com.lagradost.nicehttp.Response)?.text ?: return emptyList()
-        } catch (e: Exception) {
-            return emptyList()
-        }
-        
-        val json = mapper.readValue(jsonString, Map::class.java) as Map<String, Any>
+        val jsonString = response.toString()
+        val json = mapper.readValue<Map<String, Any>>(jsonString)
         val files = json["files"] as? List<Map<String, Any>> ?: return emptyList()
         
         return files.mapNotNull { file ->
@@ -153,9 +135,8 @@ class AnimeTokiProvider : MainAPI() {
                 val encodedName = Base64.encodeToString(name.toByteArray(), Base64.NO_WRAP)
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$id&name=$encodedName&n=2"
                 
-                // Using non-deprecated method
-                newEpisode(
-                    link = videoUrl,
+                Episode(
+                    data = videoUrl,
                     name = name,
                     episode = episodeNum
                 )
@@ -164,20 +145,8 @@ class AnimeTokiProvider : MainAPI() {
     }
 
     private fun extractEpisodeNumber(fileName: String): Int? {
-        val patterns = listOf(
-            Regex("""Episode\s*(\d+)""", RegexOption.IGNORE_CASE),
-            Regex("""EP\s*(\d+)""", RegexOption.IGNORE_CASE),
-            Regex("""E(\d+)""", RegexOption.IGNORE_CASE),
-            Regex("""- (\d+) -"""),
-            Regex("""\[(\d+)\]""")
-        )
-        
-        for (pattern in patterns) {
-            val match = pattern.find(fileName)
-            match?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
-        }
-        
-        return null
+        val pattern = Regex("""(?:Episode|EP|E)\s*(\d+)""", RegexOption.IGNORE_CASE)
+        return pattern.find(fileName)?.groupValues?.get(1)?.toIntOrNull()
     }
 
     // =============================== LOAD VIDEO LINKS ===============================
@@ -195,18 +164,11 @@ class AnimeTokiProvider : MainAPI() {
                 referer = mainUrl,
                 quality = Qualities.Unknown.value,
                 type = ExtractorLinkType.M3U8,
-                headers = mapOf(
-                    "Referer" to mainUrl,
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                )
+                headers = mapOf("Referer" to mainUrl)
             )
         )
         return true
     }
 
-    // =============================== DATA CLASS ===============================
-    data class SeasonData(
-        val id: String,
-        val name: String
-    )
+    data class SeasonData(val id: String, val name: String)
 }
