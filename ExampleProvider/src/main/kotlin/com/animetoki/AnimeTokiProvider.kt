@@ -5,6 +5,13 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.mvvm.safeApiCall
 import org.jsoup.nodes.Document
+import com.fasterxml.jackson.module.kotlin.readValue
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+
+private val mapper = jacksonObjectMapper()
+
+// Helper function to parse JSON string to Map
+inline fun <reified T> String.parseJson(): T = mapper.readValue(this)
 
 // Type aliases for JSON handling
 typealias JsonObject = Map<String, Any?>
@@ -55,10 +62,11 @@ class AnimeTokiProvider : MainAPI() {
                 !title.contains("Server renewal", ignoreCase = true) &&
                 !title.contains("Review of", ignoreCase = true)) {
                 
-                // FIXED: Use newAnimeSearchResponse instead of constructor
-                newAnimeSearchResponse(
+                // FIXED: Using AnimeSearchResponse constructor correctly
+                AnimeSearchResponse(
                     name = title,
                     url = link,
+                    apiName = name,
                     posterUrl = image
                 )
             } else null
@@ -101,10 +109,12 @@ class AnimeTokiProvider : MainAPI() {
         }
         episodes[DubStatus.Subbed] = episodeList.sortedBy { it.episode }
 
-        // FIXED: Use newAnimeLoadResponse instead of constructor
-        return newAnimeLoadResponse(
+        // FIXED: Using AnimeLoadResponse constructor correctly
+        return AnimeLoadResponse(
             name = title,
             url = url,
+            apiName = name,
+            type = TvType.Anime,
             posterUrl = poster,
             episodes = episodes
         )
@@ -144,9 +154,8 @@ class AnimeTokiProvider : MainAPI() {
             )
         } ?: throw Exception("Failed to fetch seasons from API")
         
-        // FIXED: response.text -> response.body
-        val body = response.body ?: return emptyList()
-        val json = body.parseJsonObject()
+        // FIXED: Use .text directly on the Response object
+        val json = response.text.parseJsonObject()
         val filesArray = json.getArray("files") ?: return emptyList()
         
         return filesArray.mapNotNull { item ->
@@ -173,9 +182,8 @@ class AnimeTokiProvider : MainAPI() {
             )
         } ?: return emptyList()
         
-        // FIXED: response.text -> response.body
-        val body = response.body ?: return emptyList()
-        val json = body.parseJsonObject()
+        // FIXED: Use .text directly on the Response object
+        val json = response.text.parseJsonObject()
         val filesArray = json.getArray("files") ?: return emptyList()
         
         return filesArray.mapNotNull { item ->
@@ -192,9 +200,9 @@ class AnimeTokiProvider : MainAPI() {
                 val encodedName = Base64.encodeToString(fileName.toByteArray(), Base64.NO_WRAP)
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$fileId&name=$encodedName&n=2"
                 
-                // FIXED: Use newEpisode instead of constructor
-                newEpisode(
-                    link = videoUrl,
+                // FIXED: Using Episode constructor correctly
+                Episode(
+                    data = videoUrl,
                     name = fileName,
                     episode = episodeNum
                 )
