@@ -35,12 +35,13 @@ class AnimeTokiProvider : MainAPI() {
                 !title.contains("Server renewal", ignoreCase = true) &&
                 !title.contains("Review of", ignoreCase = true)) {
                 
-                AnimeSearchResponse(
-                    title = title,
-                    url = link,
-                    posterUrl = image,
-                    apiName = name
-                )
+AnimeSearchResponse(
+    name = title,  // Changed from 'title' to 'name'
+    url = link,
+    apiName = name,
+    type = TvType.Anime,  // Add required 'type' parameter
+    posterUrl = image
+)
             } else null
         }
     }
@@ -78,14 +79,14 @@ class AnimeTokiProvider : MainAPI() {
             val seasonEpisodes = fetchEpisodesForSeason(basePath, season.id, token, season.name)
             episodes.addAll(seasonEpisodes)
         }
-
-        return AnimeLoadResponse(
-            name = title,
-            url = url,
-            posterUrl = poster,
-            episodes = episodes.sortedBy { it.episode },
-            apiName = name
-        )
+return AnimeLoadResponse(
+    name = title,
+    url = url,
+    apiName = name,
+    type = TvType.Anime,  // Add required 'type'
+    posterUrl = poster,
+    episodes = mapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })  // Wrap in map
+)
     }
 
     private suspend fun findCloudLinkFromScript(document: org.jsoup.nodes.Document): String? {
