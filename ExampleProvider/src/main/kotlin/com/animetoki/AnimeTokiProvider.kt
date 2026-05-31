@@ -13,7 +13,7 @@ typealias JsonArray = List<JsonObject>
 // Extension function for JSON parsing (defined once)
 fun String.parseJsonObject(): JsonObject {
     @Suppress("UNCHECKED_CAST")
-    return parseJson<Map<String, Any?>>(this) as JsonObject
+    return this.parseJson<Map<String, Any?>>() as JsonObject
 }
 
 // Helper extension functions
@@ -56,10 +56,10 @@ class AnimeTokiProvider : MainAPI() {
                 !title.contains("Review of", ignoreCase = true)) {
                 
                 AnimeSearchResponse(
-                    title = title,
-                    url = link,
-                    posterUrl = image,
-                    apiName = name
+                name = title,  // Changed from 'title' to 'name'
+                url = link,
+                posterUrl = image,
+                apiName = name
                 )
             } else null
         }
@@ -187,11 +187,10 @@ class AnimeTokiProvider : MainAPI() {
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$fileId&name=$encodedName&n=2"
                 
 Episode(
-    link = videoUrl,
+    data = videoUrl,  // This is the required first parameter
     name = fileName,
     episode = episodeNum,
-    posterUrl = null,
-    data = videoUrl  // Add this required parameter
+    posterUrl = null
 )
             } else null
         }.sortedBy { it.episode }
