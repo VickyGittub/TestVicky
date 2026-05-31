@@ -20,7 +20,7 @@ class AnimeTokiProvider : MainAPI() {
         const val CLOUD_BASE = "https://cloud.animetoki.com"
     }
 
-    // =============================== SEARCH ===============================
+    // =============================== SE@RCH ===============================
     override suspend fun search(query: String): List<SearchResponse> {
         val searchUrl = "$mainUrl/?s=${query.replace(" ", "+")}"
         val document = app.get(searchUrl).document
