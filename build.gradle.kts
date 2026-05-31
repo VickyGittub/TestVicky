@@ -83,6 +83,7 @@ subprojects {
         implementation("org.jsoup:jsoup:1.18.3")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
         implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.1")
+        implementation("org.json:json:20230227")
     }
 }  // This closes the subprojects block
 
