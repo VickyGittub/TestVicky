@@ -6,7 +6,6 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.mvvm.safeApiCall
 import org.jsoup.nodes.Document
 import org.json.JSONObject
-import org.json.JSONArray
 
 class AnimeTokiProvider : MainAPI() {
     override var mainUrl = "https://animetoki.com"
@@ -20,7 +19,6 @@ class AnimeTokiProvider : MainAPI() {
         const val CLOUD_BASE = "https://cloud.animetoki.com"
     }
 
-    // =============================== SEARCH ===============================
     override suspend fun search(query: String): List<SearchResponse> {
         val searchUrl = "$mainUrl/?s=${query.replace(" ", "+")}"
         val document = app.get(searchUrl).document
@@ -45,7 +43,6 @@ class AnimeTokiProvider : MainAPI() {
         }
     }
 
-    // =============================== LOAD SERIES ===============================
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
         
@@ -78,7 +75,6 @@ class AnimeTokiProvider : MainAPI() {
         )
     }
 
-    // =============================== FETCH SEASONS ===============================
     private suspend fun fetchSeasons(basePath: String, token: String): List<SeasonData> {
         val apiUrl = "$CLOUD_BASE$basePath?t=$token"
         
@@ -92,7 +88,6 @@ class AnimeTokiProvider : MainAPI() {
             )
         } ?: return emptyList()
         
-        // Get the response body text correctly
         val jsonString = response.toString()
         val jsonObject = JSONObject(jsonString)
         val filesArray = jsonObject.getJSONArray("files")
@@ -110,7 +105,6 @@ class AnimeTokiProvider : MainAPI() {
         return seasons
     }
 
-    // =============================== FETCH EPISODES FOR SEASON ===============================
     private suspend fun fetchEpisodesForSeason(basePath: String, folderId: String, token: String): List<Episode> {
         val folderApiUrl = "$CLOUD_BASE$basePath/$folderId?t=$token"
         
@@ -140,12 +134,10 @@ class AnimeTokiProvider : MainAPI() {
                 val encodedName = Base64.encodeToString(name.toByteArray(), Base64.NO_WRAP)
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$id&name=$encodedName&n=2"
                 
-                episodes.add(
-                    Episode(
-                        data = videoUrl,
-                        name = name,
-                        episode = episodeNum
-                    )
+                newEpisode(
+                    data = videoUrl,
+                    name = name,
+                    episode = episodeNum
                 )
             }
         }
@@ -157,7 +149,6 @@ class AnimeTokiProvider : MainAPI() {
         return pattern.find(fileName)?.groupValues?.get(1)?.toIntOrNull()
     }
 
-    // =============================== LOAD VIDEO LINKS ===============================
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
