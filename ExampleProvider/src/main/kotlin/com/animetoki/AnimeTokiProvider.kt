@@ -153,7 +153,11 @@ data class SeasonData(val id: String, val name: String)
 
     // ... rest of the helper functions remain the same ...
 }
+import com.lagradost.nicehttp.utils.JsonObject
 
+fun String.parseJsonObject(): JsonObject {
+    return parseJson<JsonObject>(this)
+}
 fun String.parseJsonObject(): JsonObject {
     return parseJson<Map<String, Any?>>(this) as Map<String, Any?>  // Fixed parseJson call
 }
