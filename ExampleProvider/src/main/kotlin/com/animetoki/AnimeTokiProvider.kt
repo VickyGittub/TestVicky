@@ -5,15 +5,20 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.mvvm.safeApiCall
 import org.jsoup.nodes.Document
+import kotlinx.serialization.json.*
 
 // Type aliases for JSON handling
 typealias JsonObject = Map<String, Any?>
 typealias JsonArray = List<JsonObject>
 
-// Extension function for JSON parsing (defined once)
+// Extension function for JSON parsing
 fun String.parseJsonObject(): JsonObject {
-    @Suppress("UNCHECKED_CAST")
-    return this.parseJson<Map<String, Any?>>() as JsonObject
+    return try {
+        val jsonElement = Json.parseToJsonElement(this)
+        jsonElement.jsonObject.toMap().mapValues { (_, v) -> v.jsonPrimitive.contentOrNull }
+    } catch (e: Exception) {
+        emptyMap()
+    }
 }
 
 // Helper extension functions
