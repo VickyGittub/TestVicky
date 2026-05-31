@@ -39,11 +39,6 @@ fun Project.android(configuration: BaseExtension.() -> Unit) =
     extensions.getByName<BaseExtension>("android").configuration()
 
 subprojects {
-    tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        allWarningsAsErrors = false
-    }
-}
     apply(plugin = "com.android.library")
     apply(plugin = "kotlin-android")
     apply(plugin = "com.lagradost.cloudstream3.gradle")
@@ -66,14 +61,11 @@ subprojects {
             targetCompatibility = JavaVersion.VERSION_1_8
         }
 
-        tasks.withType<KotlinJvmCompile> {
-            compilerOptions {
-                jvmTarget.set(JvmTarget.JVM_1_8)
-                freeCompilerArgs.addAll(
-                    "-Xno-call-assertions",
-                    "-Xno-param-assertions",
-                    "-Xno-receiver-assertions"
-                )
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+            kotlinOptions {
+                jvmTarget = "1.8"
+                // This prevents warnings from becoming errors
+                allWarningsAsErrors = false
             }
         }
     }
@@ -88,9 +80,8 @@ subprojects {
         implementation("org.jsoup:jsoup:1.18.3")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
         implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.1")
-        implementation("org.json:json:20230227")
     }
-}  // This closes the subprojects block
+}
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
