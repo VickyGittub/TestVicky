@@ -4,7 +4,6 @@ import android.util.Base64
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.mvvm.safeApiCall
-import org.jsoup.nodes.Document
 import org.json.JSONObject
 
 class AnimeTokiProvider : MainAPI() {
@@ -19,7 +18,6 @@ class AnimeTokiProvider : MainAPI() {
         const val CLOUD_BASE = "https://cloud.animetoki.com"
     }
 
-    // =============================== SEARCH ===============================
     override suspend fun search(query: String): List<SearchResponse> {
         val searchUrl = "$mainUrl/?s=${query.replace(" ", "+")}"
         val document = app.get(searchUrl).document
@@ -34,17 +32,15 @@ class AnimeTokiProvider : MainAPI() {
                 !title.contains("Server renewal", ignoreCase = true) &&
                 !title.contains("Review of", ignoreCase = true)) {
                 
-                AnimeSearchResponse(
+                newAnimeSearchResponse(
                     name = title,
                     url = link,
-                    apiName = this.name,
                     posterUrl = image
                 )
             } else null
         }
     }
 
-    // =============================== LOAD SERIES ===============================
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
         
@@ -67,27 +63,21 @@ class AnimeTokiProvider : MainAPI() {
             episodes.addAll(fetchEpisodesForSeason(path, season.id, token))
         }
 
-        return AnimeLoadResponse(
+        return newAnimeLoadResponse(
             name = title,
             url = url,
-            apiName = this.name,
-            type = TvType.Anime,
             posterUrl = poster,
-            episodes = mutableMapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })
+            episodes = mapOf(DubStatus.Subbed to episodes.sortedBy { it.episode })
         )
     }
 
-    // =============================== FETCH SEASONS ===============================
     private suspend fun fetchSeasons(basePath: String, token: String): List<SeasonData> {
         val apiUrl = "$CLOUD_BASE$basePath?t=$token"
         
         val response = safeApiCall {
             app.post(
                 url = apiUrl,
-                headers = mapOf(
-                    "Referer" to mainUrl,
-                    "X-Requested-With" to "XMLHttpRequest"
-                )
+                headers = mapOf("Referer" to mainUrl, "X-Requested-With" to "XMLHttpRequest")
             )
         } ?: return emptyList()
         
@@ -98,27 +88,20 @@ class AnimeTokiProvider : MainAPI() {
         val seasons = mutableListOf<SeasonData>()
         for (i in 0 until filesArray.length()) {
             val file = filesArray.getJSONObject(i)
-            val mimeType = file.getString("mimeType")
-            if (mimeType == "application/vnd.google-apps.folder") {
-                val id = file.getString("id")
-                val name = file.getString("name")
-                seasons.add(SeasonData(id, name))
+            if (file.getString("mimeType") == "application/vnd.google-apps.folder") {
+                seasons.add(SeasonData(file.getString("id"), file.getString("name")))
             }
         }
         return seasons
     }
 
-    // =============================== FETCH EPISODES ===============================
     private suspend fun fetchEpisodesForSeason(basePath: String, folderId: String, token: String): List<Episode> {
         val folderApiUrl = "$CLOUD_BASE$basePath/$folderId?t=$token"
         
         val response = safeApiCall {
             app.post(
                 url = folderApiUrl,
-                headers = mapOf(
-                    "Referer" to mainUrl,
-                    "X-Requested-With" to "XMLHttpRequest"
-                )
+                headers = mapOf("Referer" to mainUrl, "X-Requested-With" to "XMLHttpRequest")
             )
         } ?: return emptyList()
         
@@ -134,28 +117,22 @@ class AnimeTokiProvider : MainAPI() {
                 val id = file.getString("id")
                 val name = file.getString("name")
                 
-                val episodeNum = extractEpisodeNumber(name)
+                val episodeNum = Regex("""(?:Episode|EP|E)\s*(\d+)""", RegexOption.IGNORE_CASE)
+                    .find(name)?.groupValues?.get(1)?.toIntOrNull()
+                
                 val encodedName = Base64.encodeToString(name.toByteArray(), Base64.NO_WRAP)
                 val videoUrl = "$CLOUD_BASE/?a=download&id=$id&name=$encodedName&n=2"
                 
-                episodes.add(
-                    Episode(
-                        data = videoUrl,
-                        name = name,
-                        episode = episodeNum
-                    )
+                newEpisode(
+                    url = videoUrl,
+                    name = name,
+                    episode = episodeNum
                 )
             }
         }
         return episodes.sortedBy { it.episode }
     }
 
-    private fun extractEpisodeNumber(fileName: String): Int? {
-        val pattern = Regex("""(?:Episode|EP|E)\s*(\d+)""", RegexOption.IGNORE_CASE)
-        return pattern.find(fileName)?.groupValues?.get(1)?.toIntOrNull()
-    }
-
-    // =============================== LOAD VIDEO LINKS ===============================
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -165,7 +142,7 @@ class AnimeTokiProvider : MainAPI() {
         callback.invoke(
             ExtractorLink(
                 source = name,
-                name = "AnimeToki Cloud",
+                name = "AnimeToki",
                 url = data,
                 referer = mainUrl,
                 quality = Qualities.Unknown.value,
@@ -176,6 +153,5 @@ class AnimeTokiProvider : MainAPI() {
         return true
     }
 
-    // =============================== DATA CLASS ===============================
     data class SeasonData(val id: String, val name: String)
 }
