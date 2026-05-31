@@ -32,15 +32,15 @@ allprojects {
     }
 }
 
-// plugins block REMOVED - not needed
+fun Project.cloudstream(configuration: CloudstreamExtension.() -> Unit) = 
+    extensions.getByName<CloudstreamExtension>("cloudstream").configuration()
 
-fun Project.cloudstream(configuration: CloudstreamExtension.() -> Unit) = extensions.getByName<CloudstreamExtension>("cloudstream").configuration()
-
-fun Project.android(configuration: BaseExtension.() -> Unit) = extensions.getByName<BaseExtension>("android").configuration()
+fun Project.android(configuration: BaseExtension.() -> Unit) = 
+    extensions.getByName<BaseExtension>("android").configuration()
 
 subprojects {
     apply(plugin = "com.android.library")
-    apply(plugin = "kotlin-android")  // This line is actually needed in subprojects for the Kotlin compiler
+    apply(plugin = "kotlin-android")
     apply(plugin = "com.lagradost.cloudstream3.gradle")
 
     cloudstream {
@@ -48,31 +48,30 @@ subprojects {
     }
 
     android {
-android {
-    namespace = "com.animetoki"
+        namespace = "com.animetoki"
 
-    defaultConfig {
-        minSdk = 21
-        compileSdkVersion(35)  // FIXED: Changed from compileSdk = 35
-        targetSdk = 35
-    }
+        defaultConfig {
+            minSdk = 21
+            compileSdkVersion(35)
+            targetSdk = 35
+        }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
+        compileOptions {
+            sourceCompatibility = JavaVersion.VERSION_1_8
+            targetCompatibility = JavaVersion.VERSION_1_8
+        }
 
-    tasks.withType<KotlinJvmCompile> {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_1_8)
-            freeCompilerArgs.addAll(
-                "-Xno-call-assertions",
-                "-Xno-param-assertions",
-                "-Xno-receiver-assertions"
-            )
+        tasks.withType<KotlinJvmCompile> {
+            compilerOptions {
+                jvmTarget.set(JvmTarget.JVM_1_8)
+                freeCompilerArgs.addAll(
+                    "-Xno-call-assertions",
+                    "-Xno-param-assertions",
+                    "-Xno-receiver-assertions"
+                )
+            }
         }
     }
-}
 
     dependencies {
         val cloudstream by configurations
@@ -85,8 +84,8 @@ android {
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
         implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.1")
     }
-}
+}  // This closes the subprojects block
 
-task<Delete>("clean") {
+tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
